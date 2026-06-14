@@ -1,12 +1,10 @@
 ---
 name: web-studio
 description: >-
-  ゼロからWebサイト/ページを制作するワークフロー(ランディング、コーポレート/ブランド、LP、
-  ポートフォリオ、複数ページ)。「サイト作って」「LP作って」「ホームページ作って」など、デザイン品質が
-  問われるゼロからのWeb制作で発火。**AIが最も得意な土俵**で組む:Astro + Tailwind + 型付き .astro
-  コンポーネント(Props=契約)+ デザイントークン。画像は unsplash-fetch。最大の特徴は **視覚自己批評
-  ループ**(ビルド→スクショ→マルチモーダル批評→ピンポイント修正→再ビルド)で品質を閉ループ改善する点。
-  静的サイトに最適。
+  ゼロからWebサイト/ページ(ランディング、コーポレート/ブランド、LP、ポートフォリオ、複数ページ)を
+  デザイン品質込みで制作する依頼で発火。「サイト作って」「LP作って」「ホームページ作って」「ポートフォリオ
+  作って」など、ゼロからのWeb制作・デザイン品質が問われる静的サイトで使う。型付き Astro + Tailwind と
+  視覚自己批評ループで作る。既存サイトの小改修や、SSR/動的アプリが主体のケースには別手段を。
 ---
 
 # Web Studio
@@ -24,6 +22,14 @@ description: >-
 
 このドキュメントが手法そのもの。フェーズ分割・PLAN承認・出力ファイル構成の事前提示・デザイン規律・
 **自己批評ループ・ゲート段**は、品質と速度を両立させる技術。守ること。
+
+## ⚠ サイレントな罠(全フェーズ共通・静止スクショでは気づけない)
+
+このスキルの失敗はほぼこの4つに集約される。自己批評ループが**空セクションを撮って「合格」**を出す主因でもあるので、着手前に頭へ入れる(詳細は各フェーズ):
+- **撮影前に reveal を可視化しないと空撮り**になる → 撮影モード(フェーズ4)。最優先。
+- **Tailwind v4 JIT が JS連結の class を拾わず CSS が出ない** → 意味クラス1つ+CSS変数(規約)。
+- **使う書体を `<head>` で読まないと見出しが無言フォールバック** → Layout で実読込(フェーズ2)。
+- **npm クールダウンで create-astro が ETARGET** → `package.json` の astro を `^X.Y.0` に下げる(セットアップ)。
 
 ## セットアップ(1プロジェクト1回・**バックグラウンド先行**)
 
@@ -150,9 +156,9 @@ PLAN に**各画像スロット**を列挙:`パス | 被写体(英語keyword) | 
 @theme {
   --color-bg: #f7f6f3; --color-ink: #1b1b18; --color-muted: #6b6b63;
   --color-brand: #4a5d4f; --color-surface: #eceae4; --color-line: #ddd9d0;
-  --font-display: "Fraunces", Georgia, serif;
+  --font-display: "Fraunces", Georgia, serif; --font-body: system-ui, -apple-system, sans-serif;
 }
-body { background: var(--color-bg); color: var(--color-ink); font-family: system-ui, sans-serif; }
+body { background: var(--color-bg); color: var(--color-ink); font-family: var(--font-body); }
 h1,h2,h3 { font-family: var(--font-display); font-weight: 400; letter-spacing: -.01em; }
 ```
 → `bg-bg` `text-ink` `text-muted` `text-brand` `bg-surface` `border-line` `font-display` が**型のように効く契約**になる。
@@ -175,6 +181,7 @@ const { overline, heading, subheading, ctaLabel, ctaHref, image } = Astro.props;
 </section>
 ```
 - **Layout.astro** は `<head>`(OGP完全契約 + fonts + favicon)+ Header + `<slot/>` + Footer。
+  **`--font-display` 等で使う書体は `<head>` で実際に読む**(例:`<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&display=swap" rel="stylesheet">`)。読み込み漏れは見出しが Georgia へ**無言フォールバック**する沈黙トラップ。
 - **Header.astro** は `Astro.url.pathname` で**アクティブナビを自動**(中継不要)。
 
 ---
@@ -238,7 +245,7 @@ Lighthouse(perf 予算)・視覚ルーブリック。`dist/` が成果物(純静
 
 - **画像 = `npx unsplash-fetch`(導入不要・要 `UNSPLASH_ACCESS_KEY`)**。`public/img/` に取得し **root絶対
   `/img/...`** 参照、`alt` 必須、出力 JSON の `attribution.markdown` をフッターのクレジットへ。favicon は
-  `public/favicon.svg` を**必ず生成**。
+  `public/favicon.svg` を**必ず生成**(最小例:`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="6" fill="#4a5d4f"/><text x="16" y="23" text-anchor="middle" font-size="18" fill="#fff" font-family="Georgia,serif">N</text></svg>` の要領でブランド頭文字+brand色)。
   - 取得:`npx unsplash-fetch --keyword "<英語keyword>" --output public/img --name <slot> [--width 1600]`
   - **テーマ厳選(盲目的 index 0 にしない)**:`--map-only` で30枚のHTMLコンタクトシート
     (`_unsplash-cache/<kw>-map.html`)を出し→**配信→スクショ→Read**で最良を選び→`--index N` で取得
@@ -253,19 +260,17 @@ Lighthouse(perf 予算)・視覚ルーブリック。`dist/` が成果物(純静
   6. **ボーダレス近接**=枠線を廃し、要素間の**「距離」のみで分類**(ノイズ極小のモダンな透明感)。
   高級感は半透明・backdrop・微グラデで補強。**この静的レイアウトの規律と上の動的リッチネスは両立する**
   (端正な構図 × 上品なモーション)。
-- **リッチネス = 既定**(指示がない限り積極的に)。スクロール連動・パララックス・リビール・カルーセル・ページ遷移・
+- **リッチネス = 既定**(指示がない限り積極的に)。スクロール連動・パララックス・リビール・カルーセル・
   ホバーを**標準で盛り込む**。自前実装せずライブラリで:
   - **モーション**:**GSAP + ScrollTrigger** を **native スクロール上**で(happy path)。軽量なら **AOS**。
   - **カルーセル**:既定は **native scroll-snap**(`flex snap-x snap-mandatory overflow-x-auto` + `scrollBy()`)。凝るなら **Swiper/Embla/Blossom**。
   - **慣性スクロールは既定にしない**(native が a11y/sticky/アンカーと噛む)。要れば **Lenis** を別途、滑らかさだけなら `scroll-behavior:smooth`。
-  - **ページ遷移**:**`<ClientRouter />`**。React 製エフェクト(**React Bits** 等)は **`@astrojs/react` のアイランド**で、ブリーフに合う時だけ。
-  - **⚠ ClientRouter の沈黙する罠**:遷移で DOM が差し替わり初期化済みのスクロールJS/アニメが死ぬ。**各遷移で再初期化**
-    (`astro:page-load` で再実行・`astro:before-swap` で破棄)、ClientRouter 無しなら通常初期化で十分。**静止スクショのループでは気づけない**。
+  - **React エフェクト**:凝った演出(**React Bits** 等)は **`@astrojs/react` のアイランド**で、ブリーフに合う時だけ。
   - **節度**:`prefers-reduced-motion` 尊重、遅延読み込みで LCP を阻害しない。リッチ≠うるさい。
 - **スタイル = Tailwind が土台(必須)**。`@tailwindcss/vite` で**実ビルドし本物の
   CSS にコンパイル**(ランタイムJIT/FOUC なし・純静的)。トークンは `@theme` で定義=**契約層**。スタイルは
   Tailwind ユーティリティを主とし、込み入った所だけ `.astro` の scoped `<style>` を併用。
-- **規約**:見出し=`font-display`、トークンのみ(色/余白の直書き禁止)、padding で余白、セマンティックHTML、
+- **規約**:見出し=`font-display`・本文=`font-body`、トークンのみ(色/余白/書体の直書き禁止)、padding で余白、セマンティックHTML、
   クライアント操作は **Astro islands**(Alpine/React/Svelte を必要な所だけ)。
 
 ---

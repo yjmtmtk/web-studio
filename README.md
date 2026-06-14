@@ -7,7 +7,7 @@ design tokens, with photography from **unsplash-fetch**.
 Its headline feature is a **visual self-critique loop**: build → screenshot →
 multimodal critique against a design rubric → targeted fixes → rebuild → repeat.
 That closes the feedback loop a one-shot generation lacks, and is the biggest
-quality lever. Rich by default (scroll animation, carousels, transitions), with
+quality lever. Rich by default (scroll animation, carousels, reveal), with
 White Space layout discipline.
 
 ## Install
