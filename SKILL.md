@@ -33,7 +33,7 @@ PLAN 着手と同時に**BG 起動**し、承認待ち＝死に時間に install
 ```bash
 npm create astro@latest <proj> -- --template minimal --install --typescript strict --yes
 cd <proj> && npx astro add tailwind --yes   # v4 では @tailwindcss/vite を astro.config に自動追加(別途 init 不要)
-npm i gsap lenis swiper && npm i -D @astrojs/check   # モーション既定+型ゲートを先行(carousel は PLAN に合わせ swiper/embla/blossom)
+npm i gsap && npm i -D @astrojs/check   # モーション既定+型ゲートを先行(カルーセルは native scroll-snap で自作・lib不要)
 # 開発: npx astro dev   ビルド: npx astro build → dist/   検証: npx astro check
 ```
 - **Tailwind の実体は `@tailwindcss/vite`**(v4)。`astro add tailwind` がこれを `astro.config` に挿す=`tailwind.config` も `@tailwind` ディレクティブも不要。CSS 側は `@import "tailwindcss"` 1行だけ(後述 `global.css`)。
@@ -253,22 +253,15 @@ Lighthouse(perf 予算)・視覚ルーブリック。`dist/` が成果物(純静
   6. **ボーダレス近接**=枠線を廃し、要素間の**「距離」のみで分類**(ノイズ極小のモダンな透明感)。
   高級感は半透明・backdrop・微グラデで補強。**この静的レイアウトの規律と上の動的リッチネスは両立する**
   (端正な構図 × 上品なモーション)。
-- **リッチネス = 既定(指示がない限り積極的に)**。スクロール連動アニメ・パララックス・要素のリビール・
-  カルーセル/スライダー・スムーススクロール・ページ遷移・ホバーのマイクロインタラクションを**標準で盛り込む**。
-  自前実装せず**ライブラリをふんだんに使う**:
-  - **モーション/スクロール**:**GSAP + ScrollTrigger**(連動・pin・パララックス)、**Lenis**(スムーススクロール)、
-    **AOS**(軽量リビール)。
-  - **カルーセル**:**Swiper** / **Embla**、または **Blossom Carousel**(ネイティブ scroll-snap ベース・~4kb・
-    タッチで0kb・scroll-snap/sticky/スクロール駆動アニメと併用可)。
-  - **ページ遷移**:Astro **`<ClientRouter />`**(`astro:transitions`・SPA風)。
-  - **読み込み**:バニラ系(GSAP/Swiper/Lenis/AOS/Blossom)はコンポーネント `.astro` 内の `<script>`(Astro が
-    バンドルしクライアント実行)。**React 製は `@astrojs/react` を入れアイランド**(`client:visible`/`client:idle`)で。
-    `<ClientRouter />` 使用時はスクロール系を **`astro:page-load`** で再初期化。
-  - **知っておく(常用しない)**:**React Bits**(reactbits.dev)= Aurora/Particles/Split-Text 等の**独特な**アニメ
-    React コンポーネント集。見た目が強く出る(使いすぎると没個性化)ので**ブリーフに合う時だけ選択的に**
-    (使うなら `@astrojs/react` のアイランドで)。
-  - **節度**:`prefers-reduced-motion` を尊重、遅延読み込みで **LCP を阻害しない**。リッチ≠うるさい——
-    上品さは保つ。明示的に抑制を指示された時のみ簡素化する。
+- **リッチネス = 既定**(指示がない限り積極的に)。スクロール連動・パララックス・リビール・カルーセル・ページ遷移・
+  ホバーを**標準で盛り込む**。自前実装せずライブラリで:
+  - **モーション**:**GSAP + ScrollTrigger** を **native スクロール上**で(happy path)。軽量なら **AOS**。
+  - **カルーセル**:既定は **native scroll-snap**(`flex snap-x snap-mandatory overflow-x-auto` + `scrollBy()`)。凝るなら **Swiper/Embla/Blossom**。
+  - **慣性スクロールは既定にしない**(native が a11y/sticky/アンカーと噛む)。要れば **Lenis** を別途、滑らかさだけなら `scroll-behavior:smooth`。
+  - **ページ遷移**:**`<ClientRouter />`**。React 製エフェクト(**React Bits** 等)は **`@astrojs/react` のアイランド**で、ブリーフに合う時だけ。
+  - **⚠ ClientRouter の沈黙する罠**:遷移で DOM が差し替わり初期化済みのスクロールJS/アニメが死ぬ。**各遷移で再初期化**
+    (`astro:page-load` で再実行・`astro:before-swap` で破棄)、ClientRouter 無しなら通常初期化で十分。**静止スクショのループでは気づけない**。
+  - **節度**:`prefers-reduced-motion` 尊重、遅延読み込みで LCP を阻害しない。リッチ≠うるさい。
 - **スタイル = Tailwind が土台(必須)**。`@tailwindcss/vite` で**実ビルドし本物の
   CSS にコンパイル**(ランタイムJIT/FOUC なし・純静的)。トークンは `@theme` で定義=**契約層**。スタイルは
   Tailwind ユーティリティを主とし、込み入った所だけ `.astro` の scoped `<style>` を併用。
@@ -281,56 +274,6 @@ Lighthouse(perf 予算)・視覚ルーブリック。`dist/` が成果物(純静
 
 ニッチ部分の調査時間をゼロにする検証済みスニペット。
 
-## モーション基盤 `src/lib/motion.ts`(Lenis + GSAP ScrollTrigger)
-Layout の `<script>import '../lib/motion.ts'</script>` で読込み。`astro:page-load`/`before-swap` で View Transitions に追従。
-```ts
-import Lenis from 'lenis';
-import { gsap } from 'gsap';
-import { ScrollTrigger } from 'gsap/ScrollTrigger';
-gsap.registerPlugin(ScrollTrigger);
-const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
-let lenis: Lenis | null = null;
-const raf = (t: number) => lenis?.raf(t * 1000);
-function setup() {
-  if (!reduce) { lenis = new Lenis({ lerp: 0.1 }); lenis.on('scroll', ScrollTrigger.update); gsap.ticker.add(raf); gsap.ticker.lagSmoothing(0); }
-  gsap.utils.toArray<HTMLElement>('[data-reveal]').forEach((el) => { if (reduce) return;
-    gsap.from(el, { y: 30, autoAlpha: 0, duration: 1, delay: parseFloat(el.dataset.reveal || '0') || 0,
-      ease: 'power3.out', scrollTrigger: { trigger: el, start: 'top 88%', once: true } }); });
-  gsap.utils.toArray<HTMLElement>('[data-parallax]').forEach((el) => { if (reduce) return;
-    const root = el.closest<HTMLElement>('[data-parallax-root]') || el;
-    gsap.to(el, { yPercent: (parseFloat(el.dataset.parallax || '0.2') || 0.2) * 100, ease: 'none',
-      scrollTrigger: { trigger: root, start: 'top top', end: 'bottom top', scrub: true } }); });
-  ScrollTrigger.refresh();
-}
-function teardown() { ScrollTrigger.getAll().forEach((t) => t.kill()); gsap.ticker.remove(raf); lenis?.destroy(); lenis = null; }
-document.addEventListener('astro:page-load', setup);
-document.addEventListener('astro:before-swap', teardown);
-```
-使い方:要素に `data-reveal`(任意で遅延秒 `data-reveal="0.1"`)、ヒーロー背景に `data-parallax="0.18"` ＋親に `data-parallax-root`。
-**global.css に Lenis base CSS が必要**(`html.lenis,html.lenis body{height:auto}` ／ `.lenis.lenis-smooth{scroll-behavior:auto!important}`)。
-横スクロール領域(カルーセル等)には **`data-lenis-prevent`**。
-
-## カルーセル(Blossom Core)
-`Blossom(scroller, options)` は **第2引数必須**(`{}` 可)。スクローラー=ネイティブ scroll-snap の横並び。
-```astro
-<div id="carousel" class="no-scrollbar flex snap-x snap-mandatory gap-5 overflow-x-auto" data-lenis-prevent>
-  { items.map(x => <article class="shrink-0 snap-start" style="flex-basis:min(78vw,380px)">…</article>) }
-</div>
-<button data-prev>‹</button><button data-next>›</button>
-<script>
-  import { Blossom } from '@blossom-carousel/core';
-  import '@blossom-carousel/core/style.css';
-  let b: ReturnType<typeof Blossom> | null = null;
-  function init() { const el = document.querySelector<HTMLElement>('#carousel'); if (!el) return;
-    b = Blossom(el, { repeat: false }); b.init();
-    document.querySelector('[data-prev]')?.addEventListener('click', () => b?.prev({ align: 'start' }));
-    document.querySelector('[data-next]')?.addEventListener('click', () => b?.next({ align: 'start' })); }
-  document.addEventListener('astro:page-load', init);
-  document.addEventListener('astro:before-swap', () => { b?.destroy(); b = null; });
-</script>
-```
-(Swiper/Embla も同じく `astro:page-load` で init / `before-swap` で destroy。)
-
 ## プレースホルダ画像(実画像を待たない)
 画像レーン完了前は各スロットを**単色ボックス**で代替してレイアウトを確定 → 実画像が来たら `<img>` に差し替え:
 ```astro
@@ -339,9 +282,9 @@ document.addEventListener('astro:before-swap', teardown);
 コンポーネント側を `aspect-[…]` 固定＋`object-cover` にしておけば、実画像差し込みで**シフトしない**。
 
 ## 撮影モード(full-page スクショ)
-scroll-reveal の隠し要素を写すため、撮影直前に可視化(Playwright `browser_evaluate`):
+**自己批評ループの前提**:scroll-reveal の隠し要素を可視化せずに撮ると、ループは**空セクションを撮って誤批評**する(沈黙する罠)。撮影直前に可視化(Playwright `browser_evaluate`)。セレクタは**そのページが使った reveal 規約に合わせる**(GSAP の `[data-reveal]`、AOS の `[data-aos]`、`.opacity-0` 等):
 ```js
-async () => { document.querySelectorAll('[data-reveal]').forEach(e=>{ e.style.opacity='1'; e.style.visibility='visible'; e.style.transform='none'; });
+async () => { document.querySelectorAll('[data-reveal],[data-aos],.opacity-0').forEach(e=>{ e.style.opacity='1'; e.style.visibility='visible'; e.style.transform='none'; });
   if (document.fonts?.ready) await document.fonts.ready; await new Promise(r=>setTimeout(r,500)); }
 ```
 
