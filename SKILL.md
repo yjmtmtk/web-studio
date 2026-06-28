@@ -125,7 +125,7 @@ src/components/Gallery.astro
 src/components/CTA.astro
 src/pages/index.astro              // データ駆動で合成
 public/img/                        // unsplash-fetch（root絶対 /img/...）
-public/favicon.svg                 // 必ず生成
+public/favicon.svg                 // 必ず生成・他 favicon(.ico 等)は削除
 ```
 ## 画像マニフェスト(ビルダー ⇄ 画像レーンの契約)
 
@@ -256,7 +256,7 @@ Lighthouse(perf 予算)・視覚ルーブリック。`dist/` が成果物(純静
 
 - **画像 = `npx unsplash-fetch`(導入不要・要 `UNSPLASH_ACCESS_KEY`)**。`public/img/` に取得し **root絶対
   `/img/...`** 参照、`alt` 必須、出力 JSON の `attribution.markdown` をフッターのクレジットへ。favicon は
-  `public/favicon.svg` を**必ず生成**(最小例:`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="6" fill="#4a5d4f"/><text x="16" y="23" text-anchor="middle" font-size="18" fill="#fff" font-family="Georgia,serif">N</text></svg>` の要領でブランド頭文字+brand色)。
+  `public/favicon.svg` を**必ず生成**(最小例:`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="6" fill="#4a5d4f"/><text x="16" y="23" text-anchor="middle" font-size="18" fill="#fff" font-family="Georgia,serif">N</text></svg>` の要領でブランド頭文字+brand色)。**`public/` は意図的に作った資産だけ**(`favicon.svg` と `img/`)——`public/` は dist へ verbatim で ship されるので、scaffold が残した他の favicon(`favicon.ico` 等)は**削除**し、Layout `<head>` で `<link rel="icon" type="image/svg+xml" href="/favicon.svg">` を**明示**(`/favicon.ico` 自動フォールバックで Astro ロゴが漏れるのを断つ)。
   - 取得:`npx unsplash-fetch --keyword "<英語keyword>" --output public/img --name <slot> [--width 1600]`
   - **テーマ厳選(盲目的 index 0 にしない)**:`--map-only` で30枚のHTMLコンタクトシート
     (`_unsplash-cache/<kw>-map.html`)を出し→**配信→スクショ→Read**で最良を選び→`--index N` で取得
