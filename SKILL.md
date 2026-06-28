@@ -298,13 +298,17 @@ Lighthouse(perf 予算)・視覚ルーブリック。`dist/` が成果物(純静
 コンポーネント側を `aspect-[…]` 固定＋`object-cover` にしておけば、実画像差し込みで**シフトしない**。
 
 ## 撮影モード(full-page スクショ)
-**自己批評ループの前提**:scroll-reveal の隠し要素を可視化せずに撮ると、ループは**空セクションを撮って誤批評**する(沈黙する罠)。撮影直前に可視化(Playwright `browser_evaluate`)。**インライン `style.opacity='1'` では不十分**——GSAP の rAF が `fullPage` 撮影中のビューポート再設定で reveal を再 tween し、インライン値を上書きして淡く写る。**`<style>` に `!important` ルールを注入**して殴る(GSAP のインライン非 important opacity に確実に勝つ)。セレクタは reveal 規約に合わせる(GSAP `[data-reveal]`、AOS `[data-aos]`、`.opacity-0` 等):
+**自己批評ループの前提**:scroll-reveal の隠し要素を可視化せずに撮ると、ループは**空セクションを撮って誤批評**する(沈黙する罠)。撮影直前に可視化(Playwright `browser_evaluate`)。**インライン `style.opacity='1'` では不十分**——GSAP の rAF が `fullPage` 撮影中のビューポート再設定で reveal を再 tween し、インライン値を上書きして淡く写る。**`<style>` に `!important` ルールを注入**して殴る(GSAP のインライン非 important opacity に確実に勝つ)。セレクタは reveal 規約に合わせる(GSAP `[data-reveal]`、AOS `[data-aos]`、`.opacity-0` 等)。**同じ沈黙の罠が `loading="lazy"` 画像にもある**——reveal を可視化しても lazy を強制ロードしなければ、`fullPage` が下方の画像を読み切れず**空セクションを撮って誤合格**する(reveal だけ可視化して安心するな)。撮影直前に lazy→eager 化し、全 `document.images` の `onload` を待つ(下記snippetに同梱):
 ```js
 async () => {
   const s = document.createElement('style');
   s.textContent = '[data-reveal],[data-aos],.opacity-0{opacity:1!important;transform:none!important;visibility:visible!important;}';
   document.head.appendChild(s);
-  if (document.fonts?.ready) await document.fonts.ready; await new Promise(r=>setTimeout(r,500));
+  // lazy画像も撮影前に強制ロード(fullPageは下方のloading=lazyを撮りこぼし→空セクション=誤合格)
+  document.querySelectorAll('img[loading="lazy"]').forEach(i => { i.loading = 'eager'; i.src = i.src; });
+  if (document.fonts?.ready) await document.fonts.ready;
+  await Promise.all([...document.images].map(i => i.complete ? 0 : new Promise(r => { i.onload = i.onerror = r; })));
+  await new Promise(r => setTimeout(r, 400));
 }
 ```
 
